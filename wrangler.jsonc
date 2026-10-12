@@ -19,6 +19,6 @@
   ],
   // التقرير الأسبوعي: كل سبت 9 صباحاً بتوقيت بغداد (6 UTC)
   "triggers": { "crons": ["0 6 * * 6"] },
-  "vars": { "TELEGRAM_BOT_USERNAME": "" },
+  "vars": { "TELEGRAM_BOT_USERNAME": "sufra_orders_bot" },
   "observability": { "enabled": true }
 }

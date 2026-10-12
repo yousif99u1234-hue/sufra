@@ -477,7 +477,10 @@ route('GET', '/api/admin/stats', ({ D, rest, query }) => stats(D, rest, int(quer
 // --- تيليگرام ---
 route('POST', '/api/admin/telegram/link', async ({ D, env, rest, url }) => {
   if (!tgReady(env)) fail(400, 'إشعارات تيليگرام غير مفعّلة على السيرفر بعد');
-  if (url.protocol === 'https:') await tg(env, 'setWebhook', { url: `${url.origin}/api/telegram/webhook`, secret_token: await tgSecret(env), allowed_updates: ['message'] });
+  if (url.protocol === 'https:') {
+    const wh = await tg(env, 'setWebhook', { url: `${url.origin}/api/telegram/webhook`, secret_token: await tgSecret(env), allowed_updates: ['message'] });
+    if (!wh?.ok) fail(502, `تعذّر تفعيل البوت — تأكد من التوكن (${wh?.description || 'لا يوجد رد من تيليگرام'})`);
+  }
   const code = token(8);
   await D.run('DELETE FROM tg_links WHERE expires_at < ?', Date.now());
   await D.run('INSERT INTO tg_links (code, restaurant_id, expires_at) VALUES (?, ?, ?)', code, rest.id, Date.now() + 15 * 60e3);
