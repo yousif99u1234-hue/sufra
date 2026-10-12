@@ -73,7 +73,7 @@ const run = async (fn, okMsg) => { try { const r = await fn(); if (okMsg) toast(
 
 /* ---------- الدخول والتسجيل ---------- */
 function authScreen(mode = location.hash === '#signup' ? 'signup' : 'login') {
-  if (es) { es.close(); es = null; }
+  stopStream();
   document.documentElement.style.removeProperty('--brand');
   $('#app').innerHTML = `
   <div class="auth">
@@ -208,8 +208,22 @@ function beep() {
 }
 setInterval(() => { if (ORDERS.some(o => o.status === 'pending')) beep(); }, 4000);
 function updateSoundBtn() { const b = $('#sound-btn'); if (b) b.classList.toggle('muted-btn', !ui.sound); }
+let pollTimer = null, lastSig = '';
+function stopStream() { if (es) { es.close(); es = null; } clearInterval(pollTimer); pollTimer = null; }
+function notifyNew(o) {
+  beep();
+  toast(`طلب جديد #${o.number} — ${moneyT(o.total)}`, 'ok');
+  if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
+    try { new Notification(`طلب جديد #${o.number}`, { body: `${o.customer.name} · ${moneyT(o.total)}`, tag: 'order-' + o.id }); } catch { /* */ }
+  }
+}
 function connectStream() {
-  if (es) es.close();
+  stopStream();
+  if (ME.realtime === 'poll') { // الخطة المجانية: فحص كل 4 ثواني بدل الاتصال المفتوح
+    lastSig = JSON.stringify(ORDERS.map(o => [o.id, o.status, o.eta]));
+    pollTimer = setInterval(pollOrders, 4000);
+    return;
+  }
   es = new EventSource('/api/admin/stream');
   es.onopen = () => loadOrders();
   es.addEventListener('order', ev => {
@@ -217,16 +231,27 @@ function connectStream() {
     const i = ORDERS.findIndex(x => x.id === o.id);
     const isNew = i < 0;
     if (isNew) ORDERS.push(o); else ORDERS[i] = o;
-    if (isNew && o.status === 'pending') {
-      beep();
-      toast(`طلب جديد #${o.number} — ${moneyT(o.total)}`, 'ok');
-      if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
-        try { new Notification(`طلب جديد #${o.number}`, { body: `${o.customer.name} · ${moneyT(o.total)}`, tag: 'order-' + o.id }); } catch { /* */ }
-      }
-    }
+    if (isNew && o.status === 'pending') notifyNew(o);
     if (view === 'orders' && !$('#modal-root').innerHTML) renderOrdersBoard();
     updateBadge();
   });
+}
+let polling = false;
+async function pollOrders() {
+  if (polling) return;
+  polling = true;
+  try {
+    const fresh = await api('/admin/orders?scope=active');
+    const known = new Set(ORDERS.map(o => o.id));
+    const sig = JSON.stringify(fresh.map(o => [o.id, o.status, o.eta]));
+    ORDERS = fresh;
+    fresh.filter(o => !known.has(o.id) && o.status === 'pending').forEach(notifyNew);
+    if (sig !== lastSig) {
+      lastSig = sig;
+      if (view === 'orders' && !$('#modal-root').innerHTML) renderOrdersBoard();
+      updateBadge();
+    }
+  } catch { /* انقطاع مؤقت — نحاول بالدورة الجاية */ } finally { polling = false; }
 }
 async function loadOrders() {
   ORDERS = await api('/admin/orders?scope=active').catch(() => ORDERS);
@@ -444,9 +469,9 @@ function custTable() {
   return `<table class="tbl"><thead><tr><th>الزبون</th><th>الطلبات</th><th>مجموع الإنفاق</th><th>آخر طلب</th><th>النقاط</th><th>المنطقة</th><th></th></tr></thead>
   <tbody>${list.slice(0, 300).map(c => {
     const d = daysAgo(c.last_at);
-    return `<tr><td><b>${esc(c.name)}</b><small class="block muted ltr">${esc(c.phone)}</small></td><td class="num">${fmt(c.orders)}</td><td class="num">${fmt(c.spent)}</td>
+    return `<tr class="${c.blocked ? 'off' : ''}"><td><b>${esc(c.name)}</b> ${c.blocked ? badge('محظور', 'bad') : ''}<small class="block muted ltr">${esc(c.phone)}</small></td><td class="num">${fmt(c.orders)}</td><td class="num">${fmt(c.spent)}</td>
       <td>${c.last_at ? `<span class="${d > 30 ? 't-warn' : ''}">${d === 0 ? 'اليوم' : `منذ ${d} يوم`}</span>` : '—'}</td><td class="num">${fmt(c.points)}</td><td>${esc(c.area || '—')}</td>
-      <td class="acts"><a class="btn ghost sm" href="${waLink(c.phone)}" target="_blank" rel="noopener">${icon('chat')} واتساب</a></td></tr>`;
+      <td class="acts"><a class="btn ghost sm" href="${waLink(c.phone)}" target="_blank" rel="noopener">${icon('chat')} واتساب</a><button class="btn ghost sm ${c.blocked ? '' : 'danger'}" data-act="block" data-id="${c.id}">${c.blocked ? 'إلغاء الحظر' : 'حظر'}</button></td></tr>`;
   }).join('') || '<tr><td colspan="7" class="empty">لا يوجد زبائن بهذه الشريحة</td></tr>'}</tbody></table>`;
 }
 const TEMPLATES = {
@@ -631,6 +656,13 @@ views.settings = async () => {
         <label class="field grow"><span>قيمة الخصم</span><input class="input" type="number" min="0" step="250" data-s="settings.loyalty.rewardValue" value="${s.loyalty.rewardValue}"></label></div>
       <p class="muted small" id="loyalty-note">${loyaltyNote()}</p>
     </section>
+    ${ME.telegram ? `<section class="card tg-card"><h2>إشعارات تيليگرام</h2>
+      <p class="muted small">يوصلك إشعار بكل طلب جديد حتى لو التلفون مقفول أو اللوحة مسكّرة، ويا تقرير أسبوعي كل سبت.</p>
+      ${!ME.telegram.configured ? '<p class="warn-line">لم تُفعّل على السيرفر بعد — تحتاج إعداد بوت تيليگرام.</p>'
+      : ME.telegram.chats ? `<p class="ok-line">${icon('check')} مربوط بـ ${ME.telegram.chats} ${ME.telegram.chats > 1 ? 'حسابات' : 'حساب'}</p>
+        <div class="btn-row"><button class="btn ghost sm" data-act="tg-test">إرسال إشعار تجريبي</button><button class="btn ghost sm" data-act="tg-link">ربط حساب آخر</button><button class="btn ghost sm danger" data-act="tg-unlink">إلغاء الربط</button></div>`
+        : `<button class="btn primary" data-act="tg-link">${icon('chat')} ربط تيليگرام</button><p class="muted small" id="tg-hint"></p>`}
+    </section>` : ''}
     <section class="card"><h2>الحساب</h2>
       <label class="field"><span>نسبة عمولة تطبيقات التوصيل % <small>(لحساب التوفير بالإحصائيات)</small></span><input class="input" type="number" min="0" max="60" data-s="settings.commissionPct" value="${s.commissionPct}"></label>
       <button class="btn ghost" data-act="pw">تغيير كلمة المرور</button>
@@ -694,13 +726,18 @@ const A = {
     openModal(`رفض الطلب #${o.number}`, `<form id="mform" class="form"><p class="muted">اختر السبب — راح يظهر للزبون بصفحة الطلب.</p>
       ${['نفدت بعض المواد', 'ضغط طلبات عالي حالياً', 'خارج منطقة التوصيل', 'المطعم على وشك الإغلاق'].map((r, i) => `<label class="radio-row"><input type="radio" name="reason" value="${r}" ${i === 0 ? 'checked' : ''}> ${r}</label>`).join('')}
       <label class="radio-row"><input type="radio" name="reason" value="other"> سبب آخر</label><input class="input" name="other" placeholder="اكتب السبب" maxlength="120">
+      <label class="check danger-check"><input type="checkbox" name="block"> طلب وهمي — احظر هذا الرقم (${esc(o.customer.phone)})</label>
       <input type="hidden" name="id" value="${o.id}"></form>`,
     '<button class="btn ghost" data-act="modal-close">رجوع</button><button class="btn primary danger-bg" type="submit" form="mform" data-act="reject-confirm">رفض الطلب</button>');
   },
   'reject-confirm': () => {
     const f = Object.fromEntries(new FormData($('#mform'))), o = findOrder(f.id);
     const reason = f.reason === 'other' ? f.other : f.reason;
-    run(async () => { Object.assign(o, await api(`/admin/orders/${o.id}`, { method: 'PATCH', body: { action: 'reject', reason } })); closeModal(); }, 'تم رفض الطلب وإبلاغ الزبون');
+    run(async () => {
+      Object.assign(o, await api(`/admin/orders/${o.id}`, { method: 'PATCH', body: { action: 'reject', reason } }));
+      if (f.block) await api(`/admin/customers/${o.customer.id}`, { method: 'PATCH', body: { blocked: true } });
+      closeModal();
+    }, f.block ? 'تم رفض الطلب وحظر الرقم' : 'تم رفض الطلب وإبلاغ الزبون');
   },
   print: el => { const o = findOrder(el.dataset.id) || $('#modal-root')._order; if (o) printOrder(o); },
   'order-view': async el => {
@@ -785,6 +822,27 @@ const A = {
   pw: () => openModal('تغيير كلمة المرور', `<form id="mform" class="form"><label class="field"><span>الحالية</span><input class="input" type="password" name="current" required autocomplete="current-password"></label>
     <label class="field"><span>الجديدة</span><input class="input" type="password" name="next" minlength="8" required autocomplete="new-password"></label></form>`,
   '<button class="btn ghost" data-act="modal-close">إلغاء</button><button class="btn primary" type="submit" form="mform" data-act="pw-save">حفظ</button>'),
+  'tg-link': async el => {
+    const w = window.open('', '_blank'); // نفتح النافذة مباشرة حتى ما يمنعها المتصفح
+    const r = await run(() => api('/admin/telegram/link', { method: 'POST', body: {} }));
+    if (!r) { w?.close(); return; }
+    if (w) w.location = r.url; else location.href = r.url;
+    const hint = $('#tg-hint'); if (hint) hint.textContent = 'اضغط "Start" بتيليگرام، وبعدها ارجع هنا — راح تتحدث الحالة تلقائياً.';
+    let tries = 0;
+    const t = setInterval(async () => {
+      tries++;
+      const me = await api('/admin/me').catch(() => null);
+      if (me && me.telegram.chats > (ME.telegram.chats || 0)) { clearInterval(t); ME = me; toast('تم ربط تيليگرام ✓', 'ok'); if (view === 'settings') render(); }
+      if (tries > 60) clearInterval(t);
+    }, 4000);
+  },
+  'tg-test': () => run(() => api('/admin/telegram/test', { method: 'POST', body: {} }), 'انبعث إشعار تجريبي — شيك تيليگرام'),
+  'tg-unlink': () => { if (confirm('إلغاء ربط تيليگرام؟ ما راح توصلك إشعارات الطلبات هناك.')) run(async () => { await api('/admin/telegram/unlink', { method: 'POST', body: {} }); ME = await api('/admin/me'); render(); }, 'تم إلغاء الربط'); },
+  block: el => {
+    const c = CUSTOMERS.find(x => x.id === +el.dataset.id), next = !c.blocked;
+    if (next && !confirm(`حظر ${c.name} (${c.phone})؟ ما راح يكدر يطلب من متجرك.`)) return;
+    run(async () => { await api(`/admin/customers/${c.id}`, { method: 'PATCH', body: { blocked: next } }); c.blocked = next ? 1 : 0; $('#cust-table').innerHTML = custTable(); }, next ? 'تم حظر الرقم' : 'تم إلغاء الحظر');
+  },
   'pw-save': () => { const f = Object.fromEntries(new FormData($('#mform'))); run(async () => { await api('/admin/password', { method: 'POST', body: f }); closeModal(); }, 'تم تغيير كلمة المرور'); },
 };
 

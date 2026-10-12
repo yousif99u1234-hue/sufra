@@ -166,6 +166,7 @@
     let c = S.customers.find(x => x.restaurant_id === r.id && x.phone === phone);
     if (!c) { c = { id: nextId(S.customers), restaurant_id: r.id, phone, name, area: address.area || '', points: 0, created_at: Date.now() }; S.customers.push(c); }
     else { c.name = name; if (address.area) c.area = address.area; }
+    if (c.blocked) fail(403, 'تعذّر استلام الطلب — تواصل مع المطعم مباشرة');
     let discount = 0, couponCode = '', pointsUsed = 0;
     if (str(b.coupon)) { const cc = couponCheck(r.id, b.coupon, subtotal); discount += cc.discount; couponCode = cc.coupon.code; cc.coupon.used++; }
     if (b.redeem && s.loyalty.enabled && c.points >= s.loyalty.rewardPoints) { pointsUsed = s.loyalty.rewardPoints; discount += s.loyalty.rewardValue; c.points -= pointsUsed; }
@@ -363,6 +364,7 @@
     return S.customers.filter(c => c.restaurant_id === rest.id).map(c => ({ id: c.id, phone: c.phone, name: c.name, area: c.area, points: c.points, created_at: c.created_at, ...(agg[c.id] || { orders: 0, spent: 0, last_at: null }) }))
       .sort((a, b) => (b.last_at || 0) - (a.last_at || 0));
   }, true);
+  route('PATCH', '/admin/customers/:id', ({ rest, params, body }) => { const c = S.customers.find(x => x.id === int(params.id) && x.restaurant_id === rest.id); if (c) c.blocked = body.blocked ? 1 : 0; return { ok: true }; }, true);
   route('GET', '/admin/coupons', ({ rest }) => clone(S.coupons.filter(c => c.restaurant_id === rest.id).sort((a, b) => b.id - a.id)), true);
   function couponFields(rest, b, id) {
     const code = str(b.code, 20).toUpperCase().replace(/\s+/g, '');

@@ -1,5 +1,5 @@
 /* سُفرة — Service Worker: الشبكة أولاً، والنسخة المحفوظة عند انقطاع الإنترنت */
-const CACHE = 'sufra-mv4i9nyy';
+const CACHE = 'sufra-mv4kv6n7';
 const SHELL = ['', 'shared.css', 'pwa.js', 'store/', 'store/store.css', 'store/store.js', 'admin/', 'admin/admin.css', 'admin/admin.js',
   'admin/manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'demo/mock.js', 'demo/data.json'];
 

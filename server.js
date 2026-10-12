@@ -53,6 +53,8 @@ CREATE TABLE IF NOT EXISTS coupons (
   UNIQUE (restaurant_id, code));
 `);
 
+try { db.exec('ALTER TABLE customers ADD COLUMN blocked INTEGER NOT NULL DEFAULT 0'); } catch { /* العمود موجود */ }
+
 const stmts = new Map();
 const stmt = sql => { let s = stmts.get(sql); if (!s) { s = db.prepare(sql); stmts.set(sql, s); } return s; };
 const all = (sql, ...p) => stmt(sql).all(...p);
@@ -265,6 +267,7 @@ function createOrder(r, b) {
       const id = run('INSERT INTO customers (restaurant_id, phone, name, area, created_at) VALUES (?, ?, ?, ?, ?)', r.id, phone, name, address.area || '', Date.now()).lastInsertRowid;
       c = get('SELECT * FROM customers WHERE id = ?', id);
     } else run('UPDATE customers SET name = ?, area = CASE WHEN ? <> \'\' THEN ? ELSE area END WHERE id = ?', name, address.area || '', address.area || '', c.id);
+    if (c.blocked) fail(403, 'تعذّر استلام الطلب — تواصل مع المطعم مباشرة');
 
     let discount = 0, couponCode = '', pointsUsed = 0;
     if (str(b.coupon)) {
@@ -552,7 +555,11 @@ route('POST', '/api/admin/upload', ({ body }) => {
   return { url: '/uploads/' + name };
 }, { auth: true, limit: 2.5e6 });
 
-route('GET', '/api/admin/customers', ({ rest }) => all(`SELECT c.id, c.phone, c.name, c.area, c.points, c.created_at,
+route('PATCH', '/api/admin/customers/:id', ({ rest, params, body }) => {
+  run('UPDATE customers SET blocked = ? WHERE id = ? AND restaurant_id = ?', body.blocked ? 1 : 0, int(params.id), rest.id);
+  return { ok: true };
+}, { auth: true });
+route('GET', '/api/admin/customers', ({ rest }) => all(`SELECT c.id, c.phone, c.name, c.area, c.points, c.blocked, c.created_at,
     COUNT(o.id) orders, COALESCE(SUM(o.total), 0) spent, MAX(o.created_at) last_at
   FROM customers c LEFT JOIN orders o ON o.customer_id = c.id AND o.status = 'completed'
   WHERE c.restaurant_id = ? GROUP BY c.id ORDER BY last_at DESC`, rest.id), { auth: true });

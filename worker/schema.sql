@@ -1,0 +1,39 @@
+-- سُفرة — مخطط قاعدة البيانات لـ Cloudflare D1 (نفس مخطط server.js + الصور وربط تيليگرام)
+CREATE TABLE IF NOT EXISTS restaurants (
+  id INTEGER PRIMARY KEY, slug TEXT UNIQUE NOT NULL, name TEXT NOT NULL, phone TEXT UNIQUE NOT NULL,
+  owner_name TEXT NOT NULL DEFAULT '', pass TEXT NOT NULL, settings TEXT NOT NULL DEFAULT '{}', created_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS sessions (
+  token TEXT PRIMARY KEY, restaurant_id INTEGER NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE, expires_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS categories (
+  id INTEGER PRIMARY KEY, restaurant_id INTEGER NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+  name TEXT NOT NULL, sort INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS items (
+  id INTEGER PRIMARY KEY, restaurant_id INTEGER NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+  category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
+  price INTEGER NOT NULL, emoji TEXT NOT NULL DEFAULT '', image TEXT NOT NULL DEFAULT '', available INTEGER NOT NULL DEFAULT 1,
+  popular INTEGER NOT NULL DEFAULT 0, options TEXT NOT NULL DEFAULT '[]', sort INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS customers (
+  id INTEGER PRIMARY KEY, restaurant_id INTEGER NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+  phone TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', area TEXT NOT NULL DEFAULT '', points INTEGER NOT NULL DEFAULT 0,
+  blocked INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, UNIQUE (restaurant_id, phone));
+CREATE TABLE IF NOT EXISTS orders (
+  id INTEGER PRIMARY KEY, restaurant_id INTEGER NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+  customer_id INTEGER REFERENCES customers(id), number INTEGER NOT NULL, token TEXT NOT NULL, type TEXT NOT NULL,
+  table_no TEXT NOT NULL DEFAULT '', address TEXT NOT NULL DEFAULT '{}', lines TEXT NOT NULL,
+  subtotal INTEGER NOT NULL, delivery_fee INTEGER NOT NULL DEFAULT 0, discount INTEGER NOT NULL DEFAULT 0,
+  points_used INTEGER NOT NULL DEFAULT 0, points_earned INTEGER NOT NULL DEFAULT 0, total INTEGER NOT NULL,
+  coupon TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL, eta INTEGER NOT NULL DEFAULT 0,
+  reject_reason TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, accepted_at INTEGER, ready_at INTEGER, done_at INTEGER);
+CREATE INDEX IF NOT EXISTS orders_rest_time ON orders (restaurant_id, created_at);
+CREATE INDEX IF NOT EXISTS orders_rest_status ON orders (restaurant_id, status);
+CREATE INDEX IF NOT EXISTS orders_customer ON orders (customer_id);
+CREATE TABLE IF NOT EXISTS coupons (
+  id INTEGER PRIMARY KEY, restaurant_id INTEGER NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+  code TEXT NOT NULL COLLATE NOCASE, kind TEXT NOT NULL, value INTEGER NOT NULL, min_order INTEGER NOT NULL DEFAULT 0,
+  max_uses INTEGER NOT NULL DEFAULT 0, used INTEGER NOT NULL DEFAULT 0, expires_at INTEGER, active INTEGER NOT NULL DEFAULT 1,
+  UNIQUE (restaurant_id, code));
+CREATE TABLE IF NOT EXISTS images (
+  id TEXT PRIMARY KEY, restaurant_id INTEGER NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+  mime TEXT NOT NULL, data BLOB NOT NULL, created_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS tg_links (
+  code TEXT PRIMARY KEY, restaurant_id INTEGER NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE, expires_at INTEGER NOT NULL);

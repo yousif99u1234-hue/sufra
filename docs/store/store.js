@@ -423,18 +423,24 @@ async function viewTrack(id, tk) {
     $('.boot').outerHTML = `<p class="empty">${esc(e.message)}</p>`; return;
   }
   renderTrack();
+  const apply = o => {
+    const prev = track.order.status;
+    track.order = o;
+    if (o.status !== prev) {
+      try { navigator.vibrate?.([120, 60, 120]); } catch { /* */ }
+      if (o.status === 'completed') api(`/orders/${id}?token=${tk}`).then(d => { track = d; renderTrack(); }).catch(() => renderTrack());
+      else renderTrack();
+    }
+    if (['completed', 'rejected'].includes(o.status) && stream) { stream.close(); stream = null; }
+  };
   if (!['completed', 'rejected'].includes(track.order.status)) {
-    stream = new EventSource(`/api/orders/${id}/stream?token=${tk}`);
-    stream.addEventListener('status', ev => {
-      const o = JSON.parse(ev.data), prev = track.order.status;
-      track.order = o;
-      if (o.status !== prev) {
-        if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
-        if (o.status === 'completed') api(`/orders/${id}?token=${tk}`).then(d => { track = d; renderTrack(); }).catch(() => renderTrack());
-        else renderTrack();
-      }
-      if (['completed', 'rejected'].includes(o.status)) { stream.close(); stream = null; }
-    });
+    if (R.realtime === 'poll') { // فحص دوري بدل الاتصال المفتوح
+      const t = setInterval(() => api(`/orders/${id}?token=${tk}`).then(d => apply(d.order)).catch(() => null), 4000);
+      stream = { close: () => clearInterval(t) };
+    } else {
+      stream = new EventSource(`/api/orders/${id}/stream?token=${tk}`);
+      stream.addEventListener('status', ev => apply(JSON.parse(ev.data)));
+    }
   }
   tick = setInterval(() => { const e = $('#eta-left'); if (e) e.textContent = etaLeft(); }, 30000);
 }

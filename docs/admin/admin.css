@@ -28,6 +28,9 @@ small { font-size: .8em; }
 .empty { text-align: center; color: var(--muted); padding: 30px 16px; }
 .code { font-family: ui-monospace, Consolas, monospace; letter-spacing: .04em; }
 .pill { display: inline-grid; place-items: center; min-width: 24px; height: 22px; padding: 0 7px; border-radius: 99px; background: var(--surface-3); font-size: .76rem; font-weight: 700; color: var(--text-2); }
+.ok-line { display: flex; align-items: center; gap: 6px; color: var(--ok); font-weight: 600; font-size: .9rem; }
+.ok-line svg { width: 17px; height: 17px; }
+.danger-check { color: var(--bad); font-weight: 600; padding: 8px 2px; }
 .warn-line { color: var(--warn); background: var(--warn-soft); padding: 9px 12px; border-radius: 10px; font-size: .86rem; font-weight: 600; }
 
 /* ---- الدخول ---- */

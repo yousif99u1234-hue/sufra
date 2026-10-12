@@ -1,0 +1,24 @@
+{
+  // سُفرة — إعدادات Cloudflare Workers (الخطة المجانية)
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sufra",
+  "main": "worker/index.js",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "none"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "sufra",
+      "database_id": "00000000-0000-0000-0000-000000000000"
+    }
+  ],
+  // التقرير الأسبوعي: كل سبت 9 صباحاً بتوقيت بغداد (6 UTC)
+  "triggers": { "crons": ["0 6 * * 6"] },
+  "vars": { "TELEGRAM_BOT_USERNAME": "" },
+  "observability": { "enabled": true }
+}
