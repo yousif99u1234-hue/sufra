@@ -1,0 +1,15 @@
+{
+  "name": "sufra-order",
+  "version": "0.1.0",
+  "description": "سُفرة — قناة الطلب المباشر للمطاعم والكافيهات (الباقة الأولى)",
+  "main": "server.js",
+  "private": true,
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "node --no-warnings server.js",
+    "dev": "node --no-warnings --watch-path=server.js --watch-path=seed.js server.js",
+    "build:pages": "node tools/build-pages.js",
+    "icons": "node tools/make-icons.js",
+    "reset":"node -e \"require('fs').rmSync('data',{recursive:true,force:true})\" && node --no-warnings server.js"
+  }
+}

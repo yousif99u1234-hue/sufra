@@ -1,0 +1,23 @@
+{
+  "id": "./",
+  "name": "سُفرة — لوحة المطعم",
+  "short_name": "سُفرة",
+  "description": "استقبل طلبات زبائنك المباشرة بدون عمولة",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "./#orders",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f3ef",
+  "theme_color": "#d9480f",
+  "icons": [
+    { "src": "../icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "../icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "../icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "الطلبات", "url": "./#orders" },
+    { "name": "المنيو", "url": "./#menu" },
+    { "name": "الإحصائيات", "url": "./#stats" }
+  ]
+}
